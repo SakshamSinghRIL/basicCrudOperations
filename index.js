@@ -1,24 +1,34 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
-const client = require("./configs/redisconfig");
+const redis = require('redis');
+ const client = require("./configs/redisconfig");
 const oracledb = require("oracledb");
 const amqp = require('amqplib');
+const dbConfig = require('./configs/dbconfig'); 
+
+
+const util = require('util');
+const { promisify } = require('util');
+
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(express.json());
+
+
+// Create a Redis client
+const redisClient = redis.createClient();
+
+// Promisify Redis methods
+const redisGetAsync = promisify(redisClient.get).bind(redisClient);
+const redisSetAsync = promisify(redisClient.set).bind(redisClient);
 
 const rabbitmqConfig = {
   url: 'amqp://localhost',
   queue: 'customer_queue'
 };
 
-const dbConfig = {
-  user: "system",
-  password: "gDf4he4Rtt36Ed",
-  connectString: "localhost:1521/ORCLPDB1",
-};
 
 app.get("/", (req, res) => {
   res.send("Welcome to my Crud Operations server");
@@ -54,12 +64,22 @@ app.get("/customers", async (req, res) => {
     try {
 
       const { id } = req.body;
+
+      // const cachedCustomerDetails = await redisGetAsync(`customer:${id}`);
+      
+      // if (cachedCustomerDetails) {
+      //   // If details exist in Redis, return them directly
+      //   return JSON.parse(cachedCustomerDetails);
+      // }else{
+
       const connection = await oracledb.getConnection(dbConfig);
       const results = await connection.execute(
         `SELECT  * FROM SEFTTXTEST6.CUSTOMERSDATASELECTION WHERE CUSTOMER_ID  = ${id}`
       );
+      // await redisSetAsync(`customer:${id}`, JSON.stringify(results.rows));
       return results.rows;
-    } catch (error) {
+    }
+    catch (error) {
       console.log("Db not connected", error);
     }
   }

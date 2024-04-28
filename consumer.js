@@ -1,12 +1,6 @@
 const amqp = require("amqplib");
 const oracledb = require("oracledb");
-
-// Oracle DB connection settings
-const dbConfig = {
-  user: "system",
-  password: "gDf4he4Rtt36Ed",
-  connectString: "localhost:1521/ORCLPDB1",
-};
+const dbConfig = require('./configs/dbconfig')
 
 // RabbitMQ connection settings
 const rabbitmqConfig = {
