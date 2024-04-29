@@ -1,44 +1,42 @@
-const amqp = require("amqplib");
-const oracledb = require("oracledb");
+
+const amqp = require('amqplib/callback_api');
+const oracledb = require('oracledb');
 const dbConfig = require('./configs/dbconfig')
 
-// RabbitMQ connection settings
-const rabbitmqConfig = {
-  url: "amqp://localhost",
-  queue: "customer_queue",
-};
+const RABBITMQ_URL = 'amqp://localhost';
+const QUEUE_NAME = 'customer_queue';
 
-amqp
-  .connect(rabbitmqConfig.url)
-  .then((connection) => connection.createChannel())
-  .then((channel) => {
-    channel.assertQueue(rabbitmqConfig.queue, { durable: true });
-
-    channel.consume(rabbitmqConfig.queue, async (message) => {
-      try {
-        const customer = JSON.parse(message.content.toString());
-
-        const connection = await oracledb.getConnection(dbConfig);
-
-        const result = await connection.execute(
-          `INSERT INTO SEFTTXTEST6.CUSTOMERSDATASELECTION (CUSTOMER_ID,FIRST_NAME,LAST_NAME,GENDER) VALUES ( :id, :firstname, :lastname, :gender)`,
-          {
-            id: customer.id,
-            firstname: customer.firstname,
-            lastname: customer.lastname,
-            gender: customer.gender,
-          },
-          { autoCommit: true }
-        );
-
-        await connection.close();
-
-        console.log("Customer data stored successfully:", customer);
-      } catch (error) {
-        console.error("Error storing customer data:", error);
-      } 
+amqp.connect(RABBITMQ_URL, function(connection) {
+ 
+  connection.createChannel(function(channel) {
+   
+    const queue = QUEUE_NAME;
+    channel.assertQueue(queue, {
+      durable: true
     });
-  })
-  .catch((error) => {
-    console.error("Error connecting to RabbitMQ:", error);
+    
+    channel.consume(queue, function(msg) {
+      const data = JSON.parse(msg.content.toString());
+      oracledb.getConnection(dbConfig)
+        .then(connection => {
+          return connection.execute(
+            `INSERT INTO SEFTTXTEST6.CUSTOMERSDATASELECTION (CUSTOMER_ID,FIRST_NAME,LAST_NAME,GENDER) VALUES (:id, :firstname, :lastname, :gender)`,
+            {
+              id: data.id,
+              firstname: data.firstname,
+              lastname: data.lastname,
+              gender: data.gender
+            },
+            { autoCommit: true }
+          );
+        })
+        .then(() => {
+          console.log("Customer data stored successfully");
+        })
+        .catch(error => {
+          console.error("Error storing customer data:", error);
+        });
+     
+    }); 
   });
+});
