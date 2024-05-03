@@ -24,7 +24,14 @@ const QUEUE_NAME = "customer_queue";
 //   url: "amqp://localhost",
 //   queue: "customer_queue",
 // };
-
+function sortFunction(a, b) {
+  if (a[0] === b[0]) {
+      return 0;
+  }
+  else {
+      return (a[0] < b[0]) ? -1 : 1;
+  }
+}
 app.get('/fileupload',(req ,res)=>{
   return res.render("homepage");
 
@@ -84,7 +91,9 @@ app.get("/allcustomers", async (req, res) => {
         "SELECT  * FROM SEFTTXTEST6.CUSTOMERSDATASELECTION"
       );
 
-      return results.rows;
+      const table =  results.rows;
+       return table.sort(sortFunction);
+
     } catch (error) {
       console.log("Db not connected", error);
     }
