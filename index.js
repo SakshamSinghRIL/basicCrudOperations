@@ -5,17 +5,45 @@ const oracledb = require("oracledb");
 const amqp = require("amqplib/callback_api");
 const dbConfig = require("./configs/dbconfig");
 const client = require("./configs/redisconfig");
-const path = require("path")
-const multer  = require('multer')
-const upload = multer({ dest: 'uploads/' })
-const fs = require('fs');
+const path = require("path");
+const multer = require("multer");
+const upload = multer({ dest: "uploads/" });
+const fs = require("fs");
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(express.json());
+///////////////////middlewares////////////////////////
+app.use((req,res,next)=>{
+  console.log("hello from middleware 1")
+  console.log(req.headers)
+  req.myUserName = "saksham345.dev"
+  //return res.json({"msg":"hello from middlewares"})
+        next()
+})
 
-app.set("view engine","ejs");
-app.set("views",path.resolve("./views"))
+app.use((req,res,next)=>{
+  console.log(`hello from middleware 2 by ${req.myUserName}`)
+
+  //return res.json({"msg":"hello from middlewares"})
+        next()
+})
+
+
+
+app.use((req,res,next)=>{
+  //const date = new Date();
+  let date = new Date().toJSON();
+  fs.appendFile("log.txt",
+  `\n ${date} : ${req.method} : ${req.path}`,
+   (err,data) =>{
+      next();
+}
+)
+})
+
+app.set("view engine", "ejs");
+app.set("views", path.resolve("./views"));
 
 const RABBITMQ_URL = "amqp://localhost";
 const QUEUE_NAME = "customer_queue";
@@ -26,58 +54,51 @@ const QUEUE_NAME = "customer_queue";
 // };
 function sortFunction(a, b) {
   if (a[0] === b[0]) {
-      return 0;
-  }
-  else {
-      return (a[0] < b[0]) ? -1 : 1;
+    return 0;
+  } else {
+    return a[0] < b[0] ? -1 : 1;
   }
 }
-app.get('/fileupload',(req ,res)=>{
+app.get("/fileupload", (req, res) => {
   return res.render("homepage");
+});
 
-
-})
-
-app.post('/upload', upload.single('csvFile'), async (req, res) => {
+app.post("/upload", upload.single("csvFile"), async (req, res) => {
   const file = req.file;
   const filePath = file.path;
 
   try {
-    
-      const data = fs.readFileSync(filePath, 'utf8');
+    const data = fs.readFileSync(filePath, "utf8");
 
-
-      const rows = data.split('\n').map(row => row.split(','));
-      console.log(rows.length)
-      console.log(rows)
-      const connection = await oracledb.getConnection(dbConfig);
-      var i;
-     for(i=0;i<=rows.length-2;i++){
+    const rows = data.split("\n").map((row) => row.split(","));
+    console.log(rows.length);
+    console.log(rows);
+    const connection = await oracledb.getConnection(dbConfig);
+    var i;
+    for (i = 0; i <= rows.length - 2; i++) {
       await connection.execute(
         `INSERT INTO SEFTTXTEST6.CUSTOMERSDATASELECTION (CUSTOMER_ID,FIRST_NAME,LAST_NAME,GENDER) VALUES (:id, :firstname, :lastname, :gender)`,
         {
           id: rows[i][0],
           firstname: rows[i][1],
           lastname: rows[i][2],
-          gender: rows[i][3]
+          gender: rows[i][3],
         },
         { autoCommit: true }
       );
-   
     }
 
-      await connection.close();
+    await connection.close();
 
-      res.status(200).send('File uploaded and data stored successfully.');
+    res.status(200).send("File uploaded and data stored successfully.");
   } catch (err) {
-      console.error(err);
-      res.status(500).send('Error uploading file.');
+    console.error(err);
+    res.status(500).send("Error uploading file.");
   } finally {
-      // Delete uploaded file
-      fs.unlinkSync(filePath);
+    // Delete uploaded file
+    fs.unlinkSync(filePath);
   }
 });
-
 
 app.get("/welcome", (req, res) => {
   res.send("Welcome to my Crud Operations server");
@@ -91,9 +112,8 @@ app.get("/allcustomers", async (req, res) => {
         "SELECT  * FROM SEFTTXTEST6.CUSTOMERSDATASELECTION"
       );
 
-      const table =  results.rows;
-       return table.sort(sortFunction);
-
+      const table = results.rows;
+      return table.sort(sortFunction);
     } catch (error) {
       console.log("Db not connected", error);
     }
@@ -173,28 +193,27 @@ app.post("/customers", async (req, res) => {
 
     // Connect to RabbitMQ
     amqp.connect(RABBITMQ_URL, function (error0, connection) {
-    
       connection.createChannel(function (error1, channel) {
-      
         const queue = QUEUE_NAME;
         const msg = JSON.stringify({ id, firstname, lastname, gender });
 
-        
         channel.assertQueue(queue, {
           durable: true,
         });
         channel.sendToQueue(queue, Buffer.from(msg), {
           persistent: true,
         });
-    
-
       });
     });
 
     res.status(201).json({ message: "Customer data saved sucessfully" });
   } catch (error) {
     console.error("Error sending customer data to RabbitMQ:", error);
-    res.status(500).json({error: "An error occurred while sending customer data to RabbitMQ",});
+    res
+      .status(500)
+      .json({
+        error: "An error occurred while sending customer data to RabbitMQ",
+      });
   }
 });
 
